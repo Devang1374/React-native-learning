@@ -14,7 +14,7 @@ import {
   useWindowDimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { createUser, getUser } from '../services/userService';
+import { createUser, getUser, updateUser } from '../services/userService';
 
 interface User {
   id: number;
@@ -102,8 +102,11 @@ export default function App() {
     }
   }, [isAuthenticated]);
 
+  const [userId, setUserId] = useState('');
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
+  const [updatedUser, setUpdatedUser] = useState(null);
+  const [updateUserStatus, setUpdateUserStatus] = useState(false);
   async function addUser() {
     if (userName.trim() === '' || userEmail.trim() === '') {
       alert('Please enter both name and email');
@@ -124,6 +127,39 @@ export default function App() {
       setUserName('');
       setUserEmail('');
       alert('User created successfully!');
+
+    } catch (err: any) {
+      setError(err?.message || 'Failed to add user');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function heandleUpdateUser() {
+    if (userName.trim() === '' || userEmail.trim() === '') {
+      alert('Please enter both name and email');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      let userData = {
+        name: userName,
+        email: userEmail
+      };
+
+      const data = await updateUser(userId, userData);
+      setUpdatedUser(data);
+      setUsers((prev) =>
+        prev.map((u) => (String(u.id) === String(userId) ? { ...u, ...data } : u))
+      );
+      setUserName('');
+      setUserEmail('');
+      setUserId('');
+      setUpdateUserStatus(false);
+      alert('User Updated successfully!');
 
     } catch (err: any) {
       setError(err?.message || 'Failed to add user');
@@ -343,6 +379,16 @@ export default function App() {
                     <Text style={styles.userEmail}>{item.email}</Text>
                     {item.phone ? <Text style={styles.userPhone}>📞 {item.phone}</Text> : null}
                   </View>
+                  <TouchableOpacity
+                    style={styles.editBtn}
+                    onPress={() => {
+                      setUserId(String(item.id));
+                      setUserName(item.name);
+                      setUserEmail(item.email);
+                      setUpdateUserStatus(true);
+                    }}>
+                    <Text style={styles.editBtnText}>Edit</Text>
+                  </TouchableOpacity>
                 </View>
               )}
             />
@@ -350,10 +396,12 @@ export default function App() {
         </View>
       </View>
 
-      {/* Row 6: Create User Form */}
+      {/* Row 6: Create / Update User Form */}
       <View style={rowStyle}>
         <View style={[styles.subContainer, { backgroundColor: '#ffeaa7', minHeight: 240, padding: 16 }]}>
-          <Text style={styles.heading}>Create User</Text>
+          <Text style={styles.heading}>
+            {updateUserStatus ? 'Update User' : 'Create User'}
+          </Text>
           <View style={{ width: '100%', marginTop: 8 }}>
             <Text style={styles.label}>User Name:</Text>
             <TextInput
@@ -376,13 +424,38 @@ export default function App() {
             />
 
             <TouchableOpacity
-              style={[styles.primaryBtn, { backgroundColor: '#e17055', marginTop: 14 }]}
-              onPress={addUser}
+              style={[
+                styles.primaryBtn,
+                {
+                  backgroundColor: updateUserStatus ? '#0984e3' : '#e17055',
+                  marginTop: 14,
+                },
+              ]}
+              onPress={updateUserStatus ? heandleUpdateUser : addUser}
               disabled={loading}>
               <Text style={styles.primaryBtnText}>
-                {loading ? 'Adding...' : 'Add User'}
+                {loading
+                  ? updateUserStatus
+                    ? 'Updating...'
+                    : 'Adding...'
+                  : updateUserStatus
+                  ? 'Update User'
+                  : 'Add User'}
               </Text>
             </TouchableOpacity>
+
+            {updateUserStatus && (
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => {
+                  setUpdateUserStatus(false);
+                  setUserId('');
+                  setUserName('');
+                  setUserEmail('');
+                }}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </View>
@@ -765,5 +838,31 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+
+  editBtn: {
+    backgroundColor: '#0984e3',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignSelf: 'center',
+  },
+
+  editBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+
+  cancelBtn: {
+    marginTop: 8,
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+
+  cancelBtnText: {
+    color: '#636e72',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
