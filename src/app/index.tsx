@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Image,
   Platform,
@@ -13,6 +14,7 @@ import {
   useWindowDimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { createUser, getUser } from '../services/userService';
 
 interface User {
   id: number;
@@ -24,7 +26,16 @@ interface User {
 }
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const STATIC_PASSWORD = 'Devang@2363';
+
   const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [count, setCount] = useState(0);
   const [name, setName] = useState('');
@@ -63,17 +74,107 @@ export default function App() {
 
   async function fetchUser() {
     try {
-      const response = await fetch('https://jsonplaceholder.typicode.com/users');
-      const data = await response.json();
-      setUsers(data);
-    } catch (e) {
-      alert(e);
+      setLoading(true);
+      setError(null);
+
+      const data = await getUser();
+      setUsers(data || []);
+
+    } catch (err: any) {
+      setError(err?.message || 'Failed to fetch users');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleUnlock() {
+    if (passwordInput === STATIC_PASSWORD) {
+      setIsAuthenticated(true);
+      setPasswordError('');
+    } else {
+      setPasswordError('Incorrect password. Please try again.');
     }
   }
 
   useEffect(() => {
-    fetchUser();
-  }, []);
+    if (isAuthenticated) {
+      fetchUser();
+    }
+  }, [isAuthenticated]);
+
+  const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  async function addUser() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      let userData = {
+        name: userName,
+        email: userEmail
+      };
+
+      const data = await createUser(userData);
+
+      fetchUser();
+
+    } catch (err: any) {
+      setError(err?.message || 'Failed to fetch users');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <View
+        style={[
+          styles.lockContainer,
+          {
+            paddingTop: Math.max(insets.top, 24),
+            paddingBottom: Math.max(insets.bottom, 24),
+          },
+        ]}>
+        <View style={styles.lockCard}>
+          <Text style={styles.lockIcon}>🔒</Text>
+          <Text style={styles.lockTitle}>Protected Screen</Text>
+          <Text style={styles.lockSubtitle}>
+            Please enter your password to continue
+          </Text>
+
+          <View style={styles.passwordInputContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              secureTextEntry={!showPassword}
+              placeholder="Enter password..."
+              placeholderTextColor="#999"
+              value={passwordInput}
+              onChangeText={(text) => {
+                setPasswordInput(text);
+                if (passwordError) setPasswordError('');
+              }}
+              onSubmitEditing={handleUnlock}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TouchableOpacity
+              style={styles.eyeBtn}
+              onPress={() => setShowPassword(!showPassword)}>
+              <Text style={{ fontSize: 18 }}>{showPassword ? '👁️' : '🙈'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {passwordError ? (
+            <Text style={styles.lockErrorText}>{passwordError}</Text>
+          ) : null}
+
+          <TouchableOpacity style={styles.unlockBtn} onPress={handleUnlock}>
+            <Text style={styles.unlockBtnText}>Unlock</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -195,9 +296,27 @@ export default function App() {
       {/* Row 5: Users List */}
       <View style={rowStyle}>
         <View style={[styles.subContainer, { backgroundColor: '#c7ecee', minHeight: 250, padding: 12 }]}>
-          <Text style={styles.heading}>Users Directory ({users.length})</Text>
-          {users.length === 0 ? (
-            <Text style={styles.placeholderText}>Loading users...</Text>
+          <Text style={styles.heading}>
+            Users Directory {!loading && !error ? `(${users?.length || 0})` : ''}
+          </Text>
+
+          {loading ? (
+            <View style={styles.statusBox}>
+              <ActivityIndicator size="small" color="#6c5ce7" />
+              <Text style={styles.placeholderText}>Loading users...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorIcon}>⚠️</Text>
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={fetchUser}>
+                <Text style={styles.retryBtnText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : !users || users.length === 0 ? (
+            <View style={styles.statusBox}>
+              <Text style={styles.placeholderText}>No users found</Text>
+            </View>
           ) : (
             <FlatList
               data={users}
@@ -465,5 +584,142 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#0984e3',
     marginTop: 2,
+  },
+
+  statusBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 8,
+  },
+
+  errorBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffeaa7',
+    padding: 14,
+    borderRadius: 14,
+    marginVertical: 10,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#fdcb6e',
+  },
+
+  errorIcon: {
+    fontSize: 22,
+    marginBottom: 4,
+  },
+
+  errorText: {
+    fontSize: 13,
+    color: '#d63031',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+
+  retryBtn: {
+    backgroundColor: '#d63031',
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+
+  retryBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+
+  lockContainer: {
+    flex: 1,
+    backgroundColor: '#89fff9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+
+  lockCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+
+  lockIcon: {
+    fontSize: 46,
+    marginBottom: 10,
+  },
+
+  lockTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#2d3436',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+
+  lockSubtitle: {
+    fontSize: 14,
+    color: '#636e72',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+
+  passwordInputContainer: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f2f6',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#dfe4ea',
+    paddingHorizontal: 12,
+  },
+
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#2d3436',
+  },
+
+  eyeBtn: {
+    padding: 6,
+  },
+
+  lockErrorText: {
+    color: '#d63031',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+
+  unlockBtn: {
+    width: '100%',
+    backgroundColor: '#2d3436',
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+
+  unlockBtnText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
