@@ -17,3 +17,15 @@ export async function updateUser(id, userData) {
 
     return response.data;
 }
+
+export async function patchUser(id, userData) {
+    const response = await api.patch(`/users/${id}`, userData);
+
+    return response.data;
+}
+
+export async function deleteUser(id) {
+    const response = await api.patch(`/users/${id}`);
+
+    return response.data;
+}

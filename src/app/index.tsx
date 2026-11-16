@@ -14,7 +14,7 @@ import {
   useWindowDimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { createUser, getUser, updateUser } from '../services/userService';
+import { createUser, deleteUser, getUser, patchUser, updateUser } from '../services/userService';
 
 interface User {
   id: number;
@@ -107,6 +107,11 @@ export default function App() {
   const [userEmail, setUserEmail] = useState('');
   const [updatedUser, setUpdatedUser] = useState(null);
   const [updateUserStatus, setUpdateUserStatus] = useState(false);
+
+  const [patchUserId, setPatchUserId] = useState('');
+  const [patchUserName, setPatchUserName] = useState('');
+  const [patchUserEmail, setPatchUserEmail] = useState('');
+  const [originalPatchUser, setOriginalPatchUser] = useState<{ name: string; email: string } | null>(null);
   async function addUser() {
     if (userName.trim() === '' || userEmail.trim() === '') {
       alert('Please enter both name and email');
@@ -130,6 +135,56 @@ export default function App() {
 
     } catch (err: any) {
       setError(err?.message || 'Failed to add user');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function headlepatching() {
+    if (!patchUserId) {
+      alert('Please click "Patch" on a user in the list above to set up the form first');
+      return;
+    }
+
+    const updatedFields: any = {};
+    const trimmedName = patchUserName.trim();
+    const trimmedEmail = patchUserEmail.trim();
+    const origName = (originalPatchUser?.name || '').trim();
+    const origEmail = (originalPatchUser?.email || '').trim();
+
+    // Only include fields that have been modified from their original values
+    if (trimmedName !== '' && trimmedName !== origName) {
+      updatedFields.name = trimmedName;
+    }
+    if (trimmedEmail !== '' && trimmedEmail !== origEmail) {
+      updatedFields.email = trimmedEmail;
+    }
+
+    if (Object.keys(updatedFields).length === 0) {
+      alert('No fields have been modified. Please change the name or email to patch.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const data = await patchUser(patchUserId, updatedFields);
+      setUpdatedUser(data);
+      setUsers((prev) =>
+        prev.map((u) => (String(u.id) === String(patchUserId) ? { ...u, ...data, ...updatedFields } : u))
+      );
+
+      const changedList = Object.keys(updatedFields).join(', ');
+      alert(`User #${patchUserId} patched successfully! (Updated: ${changedList})`);
+
+      setPatchUserId('');
+      setPatchUserName('');
+      setPatchUserEmail('');
+      setOriginalPatchUser(null);
+
+    } catch (err: any) {
+      setError(err?.message || 'Failed to patch user');
     } finally {
       setLoading(false);
     }
@@ -163,6 +218,30 @@ export default function App() {
 
     } catch (err: any) {
       setError(err?.message || 'Failed to add user');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function heandleDelete(targetUserId?: string | number) {
+    const id = targetUserId ? String(targetUserId) : userId;
+    if (!id) {
+      alert('Please select a user to delete');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      await deleteUser(id);
+      setUsers((prev) => prev.filter((u) => String(u.id) !== String(id)));
+      setUserId('');
+
+      alert('User Deleted successfully!');
+
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete user');
     } finally {
       setLoading(false);
     }
@@ -379,15 +458,35 @@ export default function App() {
                     <Text style={styles.userEmail}>{item.email}</Text>
                     {item.phone ? <Text style={styles.userPhone}>📞 {item.phone}</Text> : null}
                   </View>
+                  <View style={styles.userActions}>
+                    <TouchableOpacity
+                      style={styles.editBtn}
+                      onPress={() => {
+                        setUserId(String(item.id));
+                        setUserName(item.name);
+                        setUserEmail(item.email);
+                        setUpdateUserStatus(true);
+                      }}>
+                      <Text style={styles.editBtnText}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.patchBtn}
+                      onPress={() => {
+                        setPatchUserId(String(item.id));
+                        setPatchUserName(item.name);
+                        setPatchUserEmail(item.email);
+                        setOriginalPatchUser({ name: item.name, email: item.email });
+                      }}>
+                      <Text style={styles.patchBtnText}>Patch</Text>
+                    </TouchableOpacity>
+                  </View>
                   <TouchableOpacity
-                    style={styles.editBtn}
+                    style={styles.DeleteBtn}
                     onPress={() => {
                       setUserId(String(item.id));
-                      setUserName(item.name);
-                      setUserEmail(item.email);
-                      setUpdateUserStatus(true);
+                      heandleDelete(item.id);
                     }}>
-                    <Text style={styles.editBtnText}>Edit</Text>
+                    <Text style={styles.deleteBtnText}>Delete</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -439,8 +538,8 @@ export default function App() {
                     ? 'Updating...'
                     : 'Adding...'
                   : updateUserStatus
-                  ? 'Update User'
-                  : 'Add User'}
+                    ? 'Update User'
+                    : 'Add User'}
               </Text>
             </TouchableOpacity>
 
@@ -456,6 +555,64 @@ export default function App() {
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
             )}
+          </View>
+        </View>
+      </View>
+
+      {/* Row 7: Patch User Form */}
+      <View style={rowStyle}>
+        <View style={[styles.subContainer, { backgroundColor: '#ffeaa7', minHeight: 240, padding: 16 }]}>
+          <Text style={styles.heading}>
+            {patchUserId ? `Patch User (#${patchUserId})` : 'Patch User'}
+          </Text>
+          <View style={{ width: '100%', marginTop: 8 }}>
+            <Text style={styles.label}>User Name:</Text>
+            <TextInput
+              style={styles.textInput}
+              value={patchUserName}
+              onChangeText={setPatchUserName}
+              placeholder={patchUserId ? 'Enter new name...' : 'Click "Patch" on a user above...'}
+              placeholderTextColor="#888"
+            />
+
+            <Text style={[styles.label, { marginTop: 10 }]}>User Email:</Text>
+            <TextInput
+              style={styles.textInput}
+              value={patchUserEmail}
+              onChangeText={setPatchUserEmail}
+              placeholder={patchUserId ? 'Enter new email...' : 'Click "Patch" on a user above...'}
+              placeholderTextColor="#888"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            <TouchableOpacity
+              style={[
+                styles.primaryBtn,
+                {
+                  backgroundColor: '#6c5ce7',
+                  marginTop: 14,
+                },
+              ]}
+              onPress={headlepatching}
+              disabled={loading}>
+              <Text style={styles.primaryBtnText}>
+                {loading ? 'Patching...' : 'Patch User'}
+              </Text>
+            </TouchableOpacity>
+
+            {patchUserId ? (
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => {
+                  setPatchUserId('');
+                  setPatchUserName('');
+                  setPatchUserEmail('');
+                  setOriginalPatchUser(null);
+                }}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
       </View>
@@ -864,5 +1021,39 @@ const styles = StyleSheet.create({
     color: '#636e72',
     fontSize: 13,
     fontWeight: '600',
+  },
+
+  userActions: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+  },
+
+  patchBtn: {
+    backgroundColor: '#6c5ce7',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignSelf: 'center',
+  },
+
+  DeleteBtn: {
+    backgroundColor: '#f31b14',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignSelf: 'center',
+  },
+
+  patchBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+
+  deleteBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: 'bold',
   },
 });
