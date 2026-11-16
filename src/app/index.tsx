@@ -105,6 +105,11 @@ export default function App() {
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
   async function addUser() {
+    if (userName.trim() === '' || userEmail.trim() === '') {
+      alert('Please enter both name and email');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -115,11 +120,13 @@ export default function App() {
       };
 
       const data = await createUser(userData);
-
-      fetchUser();
+      setUsers((prev) => [data, ...prev]);
+      setUserName('');
+      setUserEmail('');
+      alert('User created successfully!');
 
     } catch (err: any) {
-      setError(err?.message || 'Failed to fetch users');
+      setError(err?.message || 'Failed to add user');
     } finally {
       setLoading(false);
     }
@@ -340,6 +347,43 @@ export default function App() {
               )}
             />
           )}
+        </View>
+      </View>
+
+      {/* Row 6: Create User Form */}
+      <View style={rowStyle}>
+        <View style={[styles.subContainer, { backgroundColor: '#ffeaa7', minHeight: 240, padding: 16 }]}>
+          <Text style={styles.heading}>Create User</Text>
+          <View style={{ width: '100%', marginTop: 8 }}>
+            <Text style={styles.label}>User Name:</Text>
+            <TextInput
+              style={styles.textInput}
+              value={userName}
+              onChangeText={setUserName}
+              placeholder="Enter name..."
+              placeholderTextColor="#888"
+            />
+
+            <Text style={[styles.label, { marginTop: 10 }]}>User Email:</Text>
+            <TextInput
+              style={styles.textInput}
+              value={userEmail}
+              onChangeText={setUserEmail}
+              placeholder="Enter email..."
+              placeholderTextColor="#888"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            <TouchableOpacity
+              style={[styles.primaryBtn, { backgroundColor: '#e17055', marginTop: 14 }]}
+              onPress={addUser}
+              disabled={loading}>
+              <Text style={styles.primaryBtnText}>
+                {loading ? 'Adding...' : 'Add User'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </ScrollView>
